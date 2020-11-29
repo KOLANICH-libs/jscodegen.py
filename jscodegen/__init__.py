@@ -1,4 +1,3 @@
-import sys
 import json
 from enum import IntEnum
 from jscodegen.syntax import Syntax, Statements
@@ -464,6 +463,5 @@ class CodeGenerator:
 
 
 def generate(node, indent=2):
-    sys.setrecursionlimit(3000)
     g = CodeGenerator(indent)
     return g.generate(node)
