@@ -77,7 +77,10 @@ class CodeGenerator:
     def forstatement(self, stmt):
         result = "for ("
         if stmt['init']:
-            result += self.generate_expression(stmt['init'], Precedence.Sequence)
+            if stmt['init']['type'] == "VariableDeclaration":
+                result += stmt['init']['kind'] + " " + ", ".join(self.generate_statement(d) for d in stmt['init']['declarations'])
+            else:
+                result += self.generate_expression(stmt['init'], Precedence.Sequence)
         result += ";"
 
         if stmt['test']:
@@ -93,6 +96,8 @@ class CodeGenerator:
 
     def forinstatement(self, stmt):
         if stmt['left']['type'] == "VariableDeclaration":
+            if len(stmt['left']['declarations']) != 1:
+                raise Exception("len(stmt['left']['declarations']) must be 1, " + repr(len(stmt['left']['declarations'])) + " given")
             left = stmt['left']['kind'] + " " + self.generate_statement(stmt['left']['declarations'][0])
         else:
             left = self.generate_expression(stmt['left'], Precedence.Call)
@@ -211,12 +216,22 @@ class CodeGenerator:
 
 
     def ifstatement(self, stmt):
-        result = "if" + self.space + "(%s)" % self.generate_expression(stmt['test'], Precedence.Sequence) + self.space
-        result += self.generate_statement(stmt['consequent'])
-        if 'alternate' in stmt and stmt['alternate']:
-            result = result[:-1]
-            result += self.space + "else" + self.space
-            result += self.generate_statement(stmt['alternate'])
+        result = ''
+        while (True):
+            result += "if" + self.space + "(%s)" % self.generate_expression(stmt['test'], Precedence.Sequence) + self.space
+            result += self.generate_statement(stmt['consequent'])
+            if 'alternate' in stmt and stmt['alternate']:
+                if self.indentation == 0:
+                    result = result[:-1]
+                result += self.space + "else" + self.space
+                if stmt['alternate']['type'] == 'IfStatement':
+                    stmt = stmt['alternate']
+                    continue
+                else:
+                    result += self.generate_statement(stmt['alternate'])
+                    break
+            else:
+                break
         return result
 
     def whilestatement(self, stmt):
@@ -370,7 +385,19 @@ class CodeGenerator:
         result = "try" + self.space
         result += self.generate_statement(stmt['block'])
         result = result[:-1]
-        result += "\n".join([self.generate_statement(s) for s in stmt['handlers']])
+
+        handlers = []
+
+        hdlr = stmt.get('handler', None)
+        if hdlr:
+            handlers.append(hdlr)
+
+        try:
+            handlers += stmt['handlers']
+        except KeyError:
+            pass
+
+        result += "\n".join([self.generate_statement(s) for s in handlers])
         return result
 
     def catchclause(self, stmt):
